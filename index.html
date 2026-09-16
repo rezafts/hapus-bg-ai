@@ -1,167 +1,5 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hapus Background AI (Vercel Edition)</title>
-    <style>
-      body {
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: flex-start;
-        min-height: 100vh;
-        background-color: #f0f2f5;
-        margin: 0;
-        padding: 20px;
-      }
-      .card {
-        background: white;
-        padding: 40px;
-        border-radius: 16px;
-        box-shadow: 0 8px 30px rgba(0,0,0,0.08);
-        text-align: center;
-        max-width: 600px;
-        width: 100%;
-        margin-bottom: 20px;
-      }
-      h2 { color: #0d6efd; margin-bottom: 10px; }
-      p { color: #6c757d; margin-bottom: 25px; font-size: 15px; }
+import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
       
-      .btn {
-        background-color: #6c757d;
-        color: white;
-        padding: 12px 24px;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 16px;
-        font-weight: 600;
-        display: inline-block;
-        transition: 0.3s;
-        text-decoration: none;
-      }
-      .btn:hover { background-color: #5c636a; }
-      
-      .btn-primary { background-color: #0d6efd; }
-      .btn-primary:hover { background-color: #0b5ed7; }
-      
-      .btn-success { background-color: #198754; width: 100%; box-sizing: border-box; margin-top: 15px; padding: 15px; }
-      .btn-success:hover { background-color: #157347; }
-
-      .btn-download { background-color: #ffc107; color: #000; margin-top: 10px; font-size: 14px; padding: 8px 16px; display: inline-block;}
-      .btn-download:hover { background-color: #e0a800; }
-      
-      #fileInput { display: none; }
-      
-      .info-text { margin-top: 15px; font-size: 15px; color: #333; }
-      
-      #fileList {
-        text-align: left;
-        margin-top: 10px;
-        font-size: 14px;
-        color: #555;
-        max-height: 100px;
-        overflow-y: auto;
-        padding: 10px;
-        background-color: #f8f9fa;
-        border-radius: 8px;
-        border: 1px solid #ddd;
-        display: none;
-      }
-      .file-item { margin-bottom: 5px; }
-
-      #progressContainer {
-        display: none;
-        margin-top: 25px;
-        padding-top: 20px;
-        border-top: 1px solid #eee;
-      }
-      
-      /* Progress Log Style */
-      #progressLog {
-        text-align: left;
-        font-size: 12px;
-        color: #555;
-        background: #f8f9fa;
-        padding: 10px;
-        border-radius: 8px;
-        height: 60px;
-        overflow-y: auto;
-        margin-top: 10px;
-        border: 1px solid #ddd;
-        font-family: monospace;
-      }
-
-      .status-title { font-weight: bold; color: #333; margin-bottom: 5px; }
-      .error-text { color: #dc3545; font-size: 13px; font-weight: bold; margin-top: 10px; word-break: break-all; }
-
-      #previewArea {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-        margin-top: 30px;
-        width: 100%;
-        max-width: 800px;
-      }
-      
-      .preview-card {
-        background: white;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-
-      .preview-title { font-weight: 600; margin-bottom: 15px; color: #333; word-break: break-all; }
-      .image-comparison { display: flex; gap: 20px; width: 100%; justify-content: center; flex-wrap: wrap; }
-      .image-box { display: flex; flex-direction: column; align-items: center; max-width: 300px; }
-      .image-box p { margin: 0 0 5px 0; font-size: 13px; font-weight: bold; }
-
-      .preview-image {
-        max-width: 100%;
-        max-height: 250px;
-        border-radius: 8px;
-        border: 1px solid #ddd;
-        background-color: #f8f9fa;
-        background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
-        background-size: 20px 20px;
-        background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="card">
-      <h2>Hapus Background AI</h2>
-      <p>Proses berjalan 100% di browsermu.</p>
-
-      <div id="step1">
-        <label for="fileInput" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">1. Pilih Foto (Bisa Banyak)</label>
-        <input type="file" id="fileInput" accept="image/*" multiple onchange="handleFileSelection(event)">
-        <div id="fileCount" class="info-text">Belum ada foto yang dipilih.</div>
-        <div id="fileList"></div>
-      </div>
-
-      <div id="step2" style="display: none;">
-        <button id="startBtn" class="btn btn-success" onclick="startProcessing()">2. Mulai Hapus Background</button>
-      </div>
-
-      <div id="progressContainer">
-        <div id="statusTitle" class="status-title">Menyiapkan AI... (Harap bersabar, unduhan pertama butuh waktu)</div>
-        <div id="progressLog">Menunggu dimulai...</div>
-      </div>
-    </div>
-
-    <div id="previewArea"></div>
-
-    <!-- MENGGUNAKAN MODULE IMPORT MODERN UNTUK VERCEL -->
-    <script type="module">
-      import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
-      
-      // Matikan local model karena kita pakai browser murni
       env.allowLocalModels = false;
       env.useBrowserCache = true;
 
@@ -206,20 +44,19 @@
         
         const statusTitle = document.getElementById('statusTitle');
         const previewArea = document.getElementById('previewArea');
-        document.getElementById('progressLog').innerHTML = ''; // Reset log
+        document.getElementById('progressLog').innerHTML = '';
 
         try {
-            // 1. MEMUAT MODEL AI (Hanya dilakukan sekali)
             if (!segmenter) {
-                logProgress("Mengunduh model AI (BMBa/RMBG-1.4)...");
-                logProgress("Proses ini memakan data ~40MB, harap tunggu...");
+                logProgress("Mengunduh model AI (MODNet)...");
+                logProgress("Proses ini memakan data ~25MB, harap tunggu...");
                 
-                segmenter = await pipeline('image-segmentation', 'briaai/RMBG-1.4', {
-                    revision: 'main',
+                // PERBAIKAN: Mengganti model RMBG-1.4 yang tidak disupport ke Xenova/modnet
+                segmenter = await pipeline('image-segmentation', 'Xenova/modnet', {
                     progress_callback: (info) => {
                         if (info.status === 'progress' && info.name) {
                             let percent = Math.round((info.loaded / info.total) * 100);
-                            if(percent % 20 === 0) { // Log tiap 20% biar ga spam
+                            if(percent % 20 === 0) { 
                                 logProgress(`Download ${info.name}: ${percent}%`);
                             }
                         } else if (info.status === 'done') {
@@ -230,55 +67,57 @@
                 logProgress("Model AI berhasil dimuat!");
             }
 
-            // 2. MEMPROSES SETIAP FOTO
             for (let i = 0; i < window.globalSelectedFiles.length; i++) {
                 const file = window.globalSelectedFiles[i];
                 logProgress(`Memproses foto (${i+1}/${window.globalSelectedFiles.length}): ${file.name}`);
                 
                 try {
-                    // Konversi file ke image URL
                     const originalImageUrl = URL.createObjectURL(file);
-                    
                     logProgress("Sedang memotong background...");
-                    // Eksekusi AI
+                    
+                    // Eksekusi AI MODNet
                     const result = await segmenter(originalImageUrl);
                     
-                    // Membuat gambar PNG transparan dari mask
+                    // Membuat gambar PNG transparan
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     
                     const img = new Image();
                     img.src = originalImageUrl;
                     
-                    await new Promise((resolve) => {
+                    await new Promise((resolve, reject) => {
                         img.onload = () => {
                             canvas.width = img.width;
                             canvas.height = img.height;
                             
-                            // Gambar foto asli
+                            // 1. Gambar foto asli
                             ctx.drawImage(img, 0, 0);
                             
-                            // Gunakan mask dari hasil AI
-                            const maskData = ctx.createImageData(canvas.width, canvas.height);
-                            // Hasil dari RMBG-1.4 biasanya berupa PIL Image atau canvas, kita butuh ekstraksinya
-                            // Untuk amannya dengan Transformers.js, kita render mask-nya
-                            const maskRawImage = result.mask || result[0].mask; 
+                            // 2. Terapkan mask (hitam putih) dari AI
+                            const maskRawImage = Array.isArray(result) ? result[0].mask : result.mask; 
                             
-                            // Buat blob dari mask dan olah dengan composite operation
-                            const maskCanvas = document.createElement('canvas');
-                            maskCanvas.width = canvas.width;
-                            maskCanvas.height = canvas.height;
-                            const maskCtx = maskCanvas.getContext('2d');
-                            
+                            if (!maskRawImage) {
+                                reject(new Error("AI tidak mengembalikan data mask."));
+                                return;
+                            }
+
+                            // Konversi mask dari model ke Image
                             const maskImg = new Image();
                             maskImg.onload = () => {
+                                const maskCanvas = document.createElement('canvas');
+                                maskCanvas.width = canvas.width;
+                                maskCanvas.height = canvas.height;
+                                const maskCtx = maskCanvas.getContext('2d');
+                                
+                                // Gambar mask ke kanvas sementara sesuai ukuran foto
                                 maskCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
                                 
-                                // Terapkan transparansi
+                                // Gabungkan (hanya simpan pixel asli yang kena warna putih di mask)
                                 ctx.globalCompositeOperation = 'destination-in';
                                 ctx.drawImage(maskCanvas, 0, 0);
                                 ctx.globalCompositeOperation = 'source-over';
                                 
+                                // Ubah ke file download
                                 canvas.toBlob((blob) => {
                                     const resultImageUrl = URL.createObjectURL(blob);
                                     const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
@@ -307,13 +146,8 @@
                                 }, 'image/png');
                             };
                             
-                            // Jika format mask langsung base64/dataURL
-                            if(typeof maskRawImage === 'string') {
-                                maskImg.src = maskRawImage;
-                            } else {
-                                // Jika formatnya RawImage dari transformers.js
-                                maskRawImage.toDataURL().then(url => { maskImg.src = url; });
-                            }
+                            // Ekstrak URL data dari RawImage object Transformers.js
+                            maskRawImage.toDataURL().then(url => { maskImg.src = url; });
                         };
                     });
 
@@ -335,6 +169,3 @@
           window.globalSelectedFiles = []; 
         }, 2000);
       }
-    </script>
-  </body>
-</html>
