@@ -78,22 +78,23 @@
         padding-top: 20px;
         border-top: 1px solid #eee;
       }
-      .progress-bar-bg {
-        background-color: #e9ecef;
-        border-radius: 10px;
-        height: 12px;
-        width: 100%;
-        margin: 15px 0;
-        overflow: hidden;
+      
+      /* Progress Log Style */
+      #progressLog {
+        text-align: left;
+        font-size: 12px;
+        color: #555;
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 8px;
+        height: 60px;
+        overflow-y: auto;
+        margin-top: 10px;
+        border: 1px solid #ddd;
+        font-family: monospace;
       }
-      #progressBar {
-        background-color: #0d6efd;
-        height: 100%;
-        width: 0%;
-        transition: width 0.3s ease;
-      }
+
       .status-title { font-weight: bold; color: #333; margin-bottom: 5px; }
-      .status-detail { font-size: 13px; color: #6c757d; }
       .error-text { color: #dc3545; font-size: 13px; font-weight: bold; margin-top: 10px; word-break: break-all; }
 
       #previewArea {
@@ -115,33 +116,10 @@
         align-items: center;
       }
 
-      .preview-title {
-        font-weight: 600;
-        margin-bottom: 15px;
-        color: #333;
-        word-break: break-all;
-      }
-
-      .image-comparison {
-        display: flex;
-        gap: 20px;
-        width: 100%;
-        justify-content: center;
-        flex-wrap: wrap;
-      }
-
-      .image-box {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        max-width: 300px;
-      }
-
-      .image-box p {
-        margin: 0 0 5px 0;
-        font-size: 13px;
-        font-weight: bold;
-      }
+      .preview-title { font-weight: 600; margin-bottom: 15px; color: #333; word-break: break-all; }
+      .image-comparison { display: flex; gap: 20px; width: 100%; justify-content: center; flex-wrap: wrap; }
+      .image-box { display: flex; flex-direction: column; align-items: center; max-width: 300px; }
+      .image-box p { margin: 0 0 5px 0; font-size: 13px; font-weight: bold; }
 
       .preview-image {
         max-width: 100%;
@@ -154,10 +132,6 @@
         background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
       }
     </style>
-
-    <!-- Memuat Imgly secara spesifik -->
-    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/imglyRemoveBackground.umd.js"></script>
-    
   </head>
   <body>
     <div class="card">
@@ -176,152 +150,190 @@
       </div>
 
       <div id="progressContainer">
-        <div id="statusTitle" class="status-title">Menyiapkan sistem...</div>
-        <div class="progress-bar-bg">
-          <div id="progressBar"></div>
-        </div>
-        <div id="statusDetail" class="status-detail">Mohon tunggu...</div>
+        <div id="statusTitle" class="status-title">Menyiapkan AI... (Harap bersabar, unduhan pertama butuh waktu)</div>
+        <div id="progressLog">Menunggu dimulai...</div>
       </div>
     </div>
 
     <div id="previewArea"></div>
 
-    <script>
-      let globalSelectedFiles = [];
+    <!-- MENGGUNAKAN MODULE IMPORT MODERN UNTUK VERCEL -->
+    <script type="module">
+      import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+      
+      // Matikan local model karena kita pakai browser murni
+      env.allowLocalModels = false;
+      env.useBrowserCache = true;
 
-      function handleFileSelection(event) {
+      window.globalSelectedFiles = [];
+      let segmenter = null;
+
+      window.handleFileSelection = function(event) {
         const fileInput = event.target;
         const fileCount = document.getElementById('fileCount');
         const fileList = document.getElementById('fileList');
         const step2 = document.getElementById('step2');
         const previewArea = document.getElementById('previewArea');
         
-        globalSelectedFiles = Array.from(fileInput.files);
+        window.globalSelectedFiles = Array.from(fileInput.files);
         previewArea.innerHTML = ''; 
         
-        if (globalSelectedFiles.length > 0) {
-          fileCount.innerHTML = `✅ Terpilih <b>${globalSelectedFiles.length}</b> foto.`;
+        if (window.globalSelectedFiles.length > 0) {
+          fileCount.innerHTML = `✅ Terpilih <b>${window.globalSelectedFiles.length}</b> foto.`;
           fileList.style.display = 'block';
-          fileList.innerHTML = globalSelectedFiles.map(file => `<div class="file-item">📄 ${file.name}</div>`).join('');
+          fileList.innerHTML = window.globalSelectedFiles.map(file => `<div class="file-item">📄 ${file.name}</div>`).join('');
           step2.style.display = 'block';
         } else {
           fileCount.innerHTML = 'Belum ada foto yang dipilih.';
           fileList.style.display = 'none';
-          fileList.innerHTML = '';
           step2.style.display = 'none';
         }
       }
 
-      async function startProcessing() {
-        if (!globalSelectedFiles || globalSelectedFiles.length === 0) return;
+      function logProgress(msg) {
+        const logBox = document.getElementById('progressLog');
+        logBox.innerHTML += `<div>> ${msg}</div>`;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
 
+      window.startProcessing = async function() {
+        if (!window.globalSelectedFiles || window.globalSelectedFiles.length === 0) return;
+
+        document.getElementById('step1').style.display = 'none';
         document.getElementById('step2').style.display = 'none';
-        document.querySelector('label[for="fileInput"]').style.display = 'none';
-        document.getElementById('fileCount').style.display = 'none';
-        document.getElementById('fileList').style.display = 'none';
-        
         const progressContainer = document.getElementById('progressContainer');
         progressContainer.style.display = 'block';
-
+        
         const statusTitle = document.getElementById('statusTitle');
-        const statusDetail = document.getElementById('statusDetail');
-        const progressBar = document.getElementById('progressBar');
         const previewArea = document.getElementById('previewArea');
+        document.getElementById('progressLog').innerHTML = ''; // Reset log
 
-        let successCount = 0;
-        let failCount = 0;
-        const total = globalSelectedFiles.length;
-
-        // PERBAIKAN VITAL: Menetapkan struktur path yang benar agar UMD tidak bingung mencari file .wasm/.onnx
-        const imglyConfig = {
-          publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
-          progress: (key, current, totalProgress) => {
-            const percent = totalProgress ? Math.round((current / totalProgress) * 100) : 0;
-            let actionName = "Memproses...";
-            if (key.includes('fetch') || key.includes('model')) actionName = "Mengunduh Otak AI (Tunggu sebentar)...";
-            else if (key.includes('compute')) actionName = "Memotong Background...";
-
-            statusDetail.innerText = `${actionName} ${percent}%`;
-            progressBar.style.width = `${percent}%`;
-          }
-        };
-
-        for (let i = 0; i < total; i++) {
-          const file = globalSelectedFiles[i];
-          const fileNum = i + 1;
-          
-          statusTitle.innerHTML = `⏳ Memproses Foto (${fileNum}/${total}): <br><span style="color:#0d6efd">${file.name}</span>`;
-          progressBar.style.width = '0%';
-          statusDetail.innerText = "Persiapan...";
-
-          try {
-            // Mengecek apakah library benar-benar termuat
-            if (typeof imglyRemoveBackground === 'undefined') {
-                throw new Error("Library Imgly tidak termuat! Pastikan koneksi internet lancar dan CDN tidak diblokir.");
+        try {
+            // 1. MEMUAT MODEL AI (Hanya dilakukan sekali)
+            if (!segmenter) {
+                logProgress("Mengunduh model AI (BMBa/RMBG-1.4)...");
+                logProgress("Proses ini memakan data ~40MB, harap tunggu...");
+                
+                segmenter = await pipeline('image-segmentation', 'briaai/RMBG-1.4', {
+                    revision: 'main',
+                    progress_callback: (info) => {
+                        if (info.status === 'progress' && info.name) {
+                            let percent = Math.round((info.loaded / info.total) * 100);
+                            if(percent % 20 === 0) { // Log tiap 20% biar ga spam
+                                logProgress(`Download ${info.name}: ${percent}%`);
+                            }
+                        } else if (info.status === 'done') {
+                            logProgress(`Selesai download ${info.file}`);
+                        }
+                    }
+                });
+                logProgress("Model AI berhasil dimuat!");
             }
 
-            const originalImageUrl = URL.createObjectURL(file);
-            
-            // Eksekusi fungsi dengan konfigurasi yang diperbaiki
-            const imageBlob = await imglyRemoveBackground(file, imglyConfig);
-            
-            statusDetail.innerText = "Menyiapkan pratinjau...";
-            progressBar.style.width = '100%';
+            // 2. MEMPROSES SETIAP FOTO
+            for (let i = 0; i < window.globalSelectedFiles.length; i++) {
+                const file = window.globalSelectedFiles[i];
+                logProgress(`Memproses foto (${i+1}/${window.globalSelectedFiles.length}): ${file.name}`);
+                
+                try {
+                    // Konversi file ke image URL
+                    const originalImageUrl = URL.createObjectURL(file);
+                    
+                    logProgress("Sedang memotong background...");
+                    // Eksekusi AI
+                    const result = await segmenter(originalImageUrl);
+                    
+                    // Membuat gambar PNG transparan dari mask
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    const img = new Image();
+                    img.src = originalImageUrl;
+                    
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            canvas.width = img.width;
+                            canvas.height = img.height;
+                            
+                            // Gambar foto asli
+                            ctx.drawImage(img, 0, 0);
+                            
+                            // Gunakan mask dari hasil AI
+                            const maskData = ctx.createImageData(canvas.width, canvas.height);
+                            // Hasil dari RMBG-1.4 biasanya berupa PIL Image atau canvas, kita butuh ekstraksinya
+                            // Untuk amannya dengan Transformers.js, kita render mask-nya
+                            const maskRawImage = result.mask || result[0].mask; 
+                            
+                            // Buat blob dari mask dan olah dengan composite operation
+                            const maskCanvas = document.createElement('canvas');
+                            maskCanvas.width = canvas.width;
+                            maskCanvas.height = canvas.height;
+                            const maskCtx = maskCanvas.getContext('2d');
+                            
+                            const maskImg = new Image();
+                            maskImg.onload = () => {
+                                maskCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
+                                
+                                // Terapkan transparansi
+                                ctx.globalCompositeOperation = 'destination-in';
+                                ctx.drawImage(maskCanvas, 0, 0);
+                                ctx.globalCompositeOperation = 'source-over';
+                                
+                                canvas.toBlob((blob) => {
+                                    const resultImageUrl = URL.createObjectURL(blob);
+                                    const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+                                    const downloadFileName = originalName + '_nobg.png';
 
-            const resultImageUrl = URL.createObjectURL(imageBlob);
-            const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-            const downloadFileName = originalName + '_nobg.png';
+                                    const previewCard = document.createElement('div');
+                                    previewCard.className = 'preview-card';
+                                    previewCard.innerHTML = `
+                                      <div class="preview-title">${file.name}</div>
+                                      <div class="image-comparison">
+                                        <div class="image-box">
+                                          <p>Asli</p>
+                                          <img src="${originalImageUrl}" class="preview-image" style="background-image: none; background-color: #fff;">
+                                        </div>
+                                        <div class="image-box">
+                                          <p>Hasil</p>
+                                          <img src="${resultImageUrl}" class="preview-image">
+                                        </div>
+                                      </div>
+                                      <a href="${resultImageUrl}" download="${downloadFileName}" class="btn btn-download">⬇️ Unduh Gambar Ini</a>
+                                    `;
+                                    
+                                    document.getElementById('previewArea').appendChild(previewCard);
+                                    logProgress(`✅ Sukses: ${file.name}`);
+                                    resolve();
+                                }, 'image/png');
+                            };
+                            
+                            // Jika format mask langsung base64/dataURL
+                            if(typeof maskRawImage === 'string') {
+                                maskImg.src = maskRawImage;
+                            } else {
+                                // Jika formatnya RawImage dari transformers.js
+                                maskRawImage.toDataURL().then(url => { maskImg.src = url; });
+                            }
+                        };
+                    });
 
-            const previewCard = document.createElement('div');
-            previewCard.className = 'preview-card';
-            previewCard.innerHTML = `
-              <div class="preview-title">${file.name}</div>
-              <div class="image-comparison">
-                <div class="image-box">
-                  <p>Asli</p>
-                  <img src="${originalImageUrl}" class="preview-image" style="background-image: none; background-color: #fff;">
-                </div>
-                <div class="image-box">
-                  <p>Hasil</p>
-                  <img src="${resultImageUrl}" class="preview-image">
-                </div>
-              </div>
-              <a href="${resultImageUrl}" download="${downloadFileName}" class="btn btn-download">⬇️ Unduh Gambar Ini</a>
-            `;
+                } catch (err) {
+                    logProgress(`❌ Gagal foto ${file.name}: ${err.message}`);
+                }
+            }
+
+            statusTitle.innerHTML = `<span style="color: #198754; font-size:18px;">🎉 Semua proses selesai!</span>`;
             
-            previewArea.appendChild(previewCard);
-            successCount++;
-          } catch (err) {
-            console.error('Error lengkap:', err);
-            failCount++;
-            
-            // PERBAIKAN VITAL: Tampilkan ALASAN error ke layar agar kita tidak menebak-nebak
-            const errorCard = document.createElement('div');
-            errorCard.className = 'preview-card';
-            errorCard.innerHTML = `
-              <div class="preview-title" style="color: #dc3545;">❌ Gagal memproses: ${file.name}</div>
-              <div class="error-text">Alasan: ${err.message || err.toString()}</div>
-              <div style="font-size:12px; color:#666; margin-top:5px;">(Coba gunakan foto lain atau resolusi lebih kecil)</div>
-            `;
-            previewArea.appendChild(errorCard);
-          }
+        } catch (globalErr) {
+            logProgress(`❌ ERROR FATAL: ${globalErr.message}`);
+            statusTitle.innerHTML = `<span style="color: #dc3545; font-size:18px;">Gagal memuat AI. Refresh halaman.</span>`;
         }
 
-        // Tampilan selesai
-        progressBar.parentElement.style.display = 'none';
-        statusDetail.style.display = 'none';
-
-        if (failCount === 0) {
-          statusTitle.innerHTML = `<span style="color: #198754; font-size:18px;">🎉 Selesai!</span>`;
-        } else {
-          statusTitle.innerHTML = `<span>Proses selesai. Sebagian gagal.</span>`;
-        }
-        
         setTimeout(() => {
-          document.querySelector('label[for="fileInput"]').style.display = 'inline-block';
+          document.getElementById('step1').style.display = 'block';
           document.getElementById('fileInput').value = '';
-          globalSelectedFiles = []; 
-        }, 1500);
+          window.globalSelectedFiles = []; 
+        }, 2000);
       }
     </script>
   </body>
