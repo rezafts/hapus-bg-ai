@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hapus Background AI</title>
+    <!-- Memuat Library Client-Side Stabil -->
+    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/bundle.js"></script>
     <style>
       body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -43,18 +45,11 @@
         text-decoration: none;
       }
       .btn:hover { background-color: #5c636a; }
-      
       .btn-primary { background-color: #0d6efd; }
-      .btn-primary:hover { background-color: #0b5ed7; }
-      
       .btn-success { background-color: #198754; width: 100%; box-sizing: border-box; margin-top: 15px; padding: 15px; }
-      .btn-success:hover { background-color: #157347; }
-
       .btn-download { background-color: #ffc107; color: #000; margin-top: 10px; font-size: 14px; padding: 8px 16px; display: inline-block;}
-      .btn-download:hover { background-color: #e0a800; }
       
       #fileInput { display: none; }
-      
       .info-text { margin-top: 15px; font-size: 15px; color: #333; }
       
       #fileList {
@@ -72,28 +67,9 @@
       }
       .file-item { margin-bottom: 5px; }
 
-      #progressContainer {
-        display: none;
-        margin-top: 25px;
-        padding-top: 20px;
-        border-top: 1px solid #eee;
-      }
-      
-      #progressLog {
-        text-align: left;
-        font-size: 12px;
-        color: #555;
-        background: #f8f9fa;
-        padding: 10px;
-        border-radius: 8px;
-        height: 60px;
-        overflow-y: auto;
-        margin-top: 10px;
-        border: 1px solid #ddd;
-        font-family: monospace;
-      }
-
+      #progressContainer { display: none; margin-top: 25px; padding-top: 20px; border-top: 1px solid #eee; }
       .status-title { font-weight: bold; color: #333; margin-bottom: 5px; }
+      .status-detail { font-size: 13px; color: #6c757d; }
 
       #previewArea {
         display: flex;
@@ -103,7 +79,6 @@
         width: 100%;
         max-width: 800px;
       }
-      
       .preview-card {
         background: white;
         padding: 20px;
@@ -113,7 +88,6 @@
         flex-direction: column;
         align-items: center;
       }
-
       .preview-title { font-weight: 600; margin-bottom: 15px; color: #333; word-break: break-all; }
       .image-comparison { display: flex; gap: 20px; width: 100%; justify-content: center; flex-wrap: wrap; }
       .image-box { display: flex; flex-direction: column; align-items: center; max-width: 300px; }
@@ -148,37 +122,30 @@
       </div>
 
       <div id="progressContainer">
-        <div id="statusTitle" class="status-title">Menyiapkan AI... (Harap bersabar, unduhan pertama butuh waktu)</div>
-        <div id="progressLog">Menunggu dimulai...</div>
+        <div id="statusTitle" class="status-title">Memproses foto...</div>
+        <div id="statusDetail" class="status-detail">Mohon tunggu sebentar...</div>
       </div>
     </div>
 
     <div id="previewArea"></div>
 
-    <!-- MENGGUNAKAN VERSI 3 TERBARU DARI HUGGING FACE -->
-    <script type="module">
-      import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.0-alpha.12';
-      
-      env.allowLocalModels = false;
-      env.useBrowserCache = true;
+    <script>
+      let globalSelectedFiles = [];
 
-      window.globalSelectedFiles = [];
-      let segmenter = null;
-
-      window.handleFileSelection = function(event) {
+      function handleFileSelection(event) {
         const fileInput = event.target;
         const fileCount = document.getElementById('fileCount');
         const fileList = document.getElementById('fileList');
         const step2 = document.getElementById('step2');
         const previewArea = document.getElementById('previewArea');
         
-        window.globalSelectedFiles = Array.from(fileInput.files);
+        globalSelectedFiles = Array.from(fileInput.files);
         previewArea.innerHTML = ''; 
         
-        if (window.globalSelectedFiles.length > 0) {
-          fileCount.innerHTML = `✅ Terpilih <b>${window.globalSelectedFiles.length}</b> foto.`;
+        if (globalSelectedFiles.length > 0) {
+          fileCount.innerHTML = `✅ Terpilih <b>${globalSelectedFiles.length}</b> foto.`;
           fileList.style.display = 'block';
-          fileList.innerHTML = window.globalSelectedFiles.map(file => `<div class="file-item">📄 ${file.name}</div>`).join('');
+          fileList.innerHTML = globalSelectedFiles.map(file => `<div class="file-item">📄 ${file.name}</div>`).join('');
           step2.style.display = 'block';
         } else {
           fileCount.innerHTML = 'Belum ada foto yang dipilih.';
@@ -187,14 +154,8 @@
         }
       }
 
-      function logProgress(msg) {
-        const logBox = document.getElementById('progressLog');
-        logBox.innerHTML += `<div>> ${msg}</div>`;
-        logBox.scrollTop = logBox.scrollHeight;
-      }
-
-      window.startProcessing = async function() {
-        if (!window.globalSelectedFiles || window.globalSelectedFiles.length === 0) return;
+      async function startProcessing() {
+        if (!globalSelectedFiles || globalSelectedFiles.length === 0) return;
 
         document.getElementById('step1').style.display = 'none';
         document.getElementById('step2').style.display = 'none';
@@ -202,142 +163,66 @@
         progressContainer.style.display = 'block';
         
         const statusTitle = document.getElementById('statusTitle');
-        document.getElementById('progressLog').innerHTML = '';
+        const statusDetail = document.getElementById('statusDetail');
+        const previewArea = document.getElementById('previewArea');
 
-        try {
-            if (!segmenter) {
-                logProgress("Mengunduh model AI (RMBG-1.4)...");
-                logProgress("Ukurannya ~40MB, hanya diunduh pada foto pertama.");
-                
-                segmenter = await pipeline('image-segmentation', 'briaai/RMBG-1.4', {
-                    progress_callback: (info) => {
-                        if (info.status === 'progress' && info.name) {
-                            let percent = Math.round((info.loaded / info.total) * 100);
-                            if(percent % 25 === 0) { 
-                                logProgress(`Download ${info.name}: ${percent}%`);
-                            }
-                        } else if (info.status === 'done') {
-                            logProgress(`Selesai download file.`);
-                        }
-                    }
-                });
-                logProgress("✅ Model AI berhasil dimuat!");
-            }
+        let successCount = 0;
+        let failCount = 0;
+        const total = globalSelectedFiles.length;
 
-            for (let i = 0; i < window.globalSelectedFiles.length; i++) {
-                const file = window.globalSelectedFiles[i];
-                logProgress(`Memproses foto (${i+1}/${window.globalSelectedFiles.length}): ${file.name}`);
-                
-                try {
-                    const originalImageUrl = URL.createObjectURL(file);
-                    logProgress("Sedang memotong background, tunggu sebentar...");
-                    
-                    // Eksekusi AI v3
-                    const result = await segmenter(originalImageUrl);
-                    
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    
-                    const img = new Image();
-                    img.src = originalImageUrl;
-                    
-                    await new Promise((resolve, reject) => {
-                        img.onload = async () => {
-                            canvas.width = img.width;
-                            canvas.height = img.height;
-                            ctx.drawImage(img, 0, 0);
-                            
-                            // Di v3, result bisa berupa array atau object langsung
-                            let maskRawImage = result.mask || (result[0] ? result[0].mask : null); 
-                            
-                            if (!maskRawImage) {
-                                reject(new Error("AI tidak mengenali objek di foto ini."));
-                                return;
-                            }
+        for (let i = 0; i < total; i++) {
+          const file = globalSelectedFiles[i];
+          statusTitle.innerHTML = `⏳ Memproses (${i+1}/${total}): ${file.name}`;
+          statusDetail.innerText = "Mengunduh model / Memotong background...";
 
-                            const maskImg = new Image();
-                            maskImg.onload = () => {
-                                const maskCanvas = document.createElement('canvas');
-                                maskCanvas.width = canvas.width;
-                                maskCanvas.height = canvas.height;
-                                const maskCtx = maskCanvas.getContext('2d');
-                                
-                                maskCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
-                                
-                                ctx.globalCompositeOperation = 'destination-in';
-                                ctx.drawImage(maskCanvas, 0, 0);
-                                ctx.globalCompositeOperation = 'source-over';
-                                
-                                canvas.toBlob((blob) => {
-                                    const resultImageUrl = URL.createObjectURL(blob);
-                                    const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
-                                    const downloadFileName = originalName + '_nobg.png';
-
-                                    const previewCard = document.createElement('div');
-                                    previewCard.className = 'preview-card';
-                                    previewCard.innerHTML = `
-                                      <div class="preview-title">${file.name}</div>
-                                      <div class="image-comparison">
-                                        <div class="image-box">
-                                          <p>Asli</p>
-                                          <img src="${originalImageUrl}" class="preview-image" style="background-image: none; background-color: #fff;">
-                                        </div>
-                                        <div class="image-box">
-                                          <p>Hasil</p>
-                                          <img src="${resultImageUrl}" class="preview-image">
-                                        </div>
-                                      </div>
-                                      <a href="${resultImageUrl}" download="${downloadFileName}" class="btn btn-download">⬇️ Unduh Gambar Ini</a>
-                                    `;
-                                    
-                                    document.getElementById('previewArea').appendChild(previewCard);
-                                    logProgress(`✅ Sukses: ${file.name}`);
-                                    resolve();
-                                }, 'image/png');
-                            };
-                            
-                            // Mengekstrak mask di v3
-                            try {
-                                if (typeof maskRawImage === 'string') {
-                                    maskImg.src = maskRawImage;
-                                } else if (maskRawImage.toDataURL) {
-                                    maskImg.src = await maskRawImage.toDataURL();
-                                } else {
-                                    // Fallback jika berupa objek PIL internal
-                                    const maskCanvasInternal = document.createElement('canvas');
-                                    maskCanvasInternal.width = maskRawImage.width;
-                                    maskCanvasInternal.height = maskRawImage.height;
-                                    const ctxInternal = maskCanvasInternal.getContext('2d');
-                                    const imgData = new ImageData(
-                                      new Uint8ClampedArray(maskRawImage.data), 
-                                      maskRawImage.width, 
-                                      maskRawImage.height
-                                    );
-                                    ctxInternal.putImageData(imgData, 0, 0);
-                                    maskImg.src = maskCanvasInternal.toDataURL();
-                                }
-                            } catch (maskErr) {
-                                reject(new Error("Gagal membaca hasil potongan AI."));
-                            }
-                        };
-                    });
-
-                } catch (err) {
-                    logProgress(`❌ Gagal foto ${file.name}: ${err.message}`);
-                }
-            }
-
-            statusTitle.innerHTML = `<span style="color: #198754; font-size:18px;">🎉 Semua proses selesai!</span>`;
+          try {
+            const originalImageUrl = URL.createObjectURL(file);
             
-        } catch (globalErr) {
-            logProgress(`❌ ERROR FATAL: ${globalErr.message}`);
-            statusTitle.innerHTML = `<span style="color: #dc3545; font-size:18px;">Gagal memuat AI. Refresh halaman.</span>`;
+            // Menggunakan fungsi global imgly bundle yang stabil
+            const imageBlob = await imglyRemoveBackground.removeBackground(file, {
+              publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.5/dist/'
+            });
+            
+            const resultImageUrl = URL.createObjectURL(imageBlob);
+            const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            const downloadFileName = originalName + '_nobg.png';
+
+            const previewCard = document.createElement('div');
+            previewCard.className = 'preview-card';
+            previewCard.innerHTML = `
+              <div class="preview-title">${file.name}</div>
+              <div class="image-comparison">
+                <div class="image-box">
+                  <p>Asli</p>
+                  <img src="${originalImageUrl}" class="preview-image" style="background-image: none; background-color: #fff;">
+                </div>
+                <div class="image-box">
+                  <p>Hasil</p>
+                  <img src="${resultImageUrl}" class="preview-image">
+                </div>
+              </div>
+              <a href="${resultImageUrl}" download="${downloadFileName}" class="btn btn-download">⬇️ Unduh Gambar Ini</a>
+            `;
+            
+            previewArea.appendChild(previewCard);
+            successCount++;
+          } catch (err) {
+            console.error(err);
+            failCount++;
+            const errorCard = document.createElement('div');
+            errorCard.className = 'preview-card';
+            errorCard.innerHTML = `<div class="preview-title" style="color: #dc3545;">❌ Gagal: ${file.name}</div><div style="font-size:12px; color:#666;">${err.message || err}</div>`;
+            previewArea.appendChild(errorCard);
+          }
         }
 
+        progressContainer.style.display = 'none';
+        statusTitle.innerHTML = `<span style="color: #198754; font-size:18px;">🎉 Selesai! (${successCount} Berhasil, ${failCount} Gagal)</span>`;
+        
         setTimeout(() => {
           document.getElementById('step1').style.display = 'block';
           document.getElementById('fileInput').value = '';
-          window.globalSelectedFiles = []; 
+          globalSelectedFiles = []; 
         }, 2000);
       }
     </script>
