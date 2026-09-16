@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        min-height: 100vh;
+        background-color: #f0f2f5;
+        margin: 0;
+        padding: 20px;
+      }
+      .card {
+        background: white;
+        padding: 40px;
+        border-radius: 16px;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.08);
+        text-align: center;
+        max-width: 600px;
+        width: 100%;
+        margin-bottom: 20px;
+      }
+      h2 { color: #0d6efd; margin-bottom: 10px; }
+      p { color: #6c757d; margin-bottom: 25px; font-size: 15px; }
+      
+      .btn {
+        background-color: #6c757d;
+        color: white;
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 600;
+        display: inline-block;
+        transition: 0.3s;
+        text-decoration: none;
+      }
+      .btn:hover { background-color: #5c636a; }
+      
+      .btn-primary { background-color: #0d6efd; }
+      .btn-primary:hover { background-color: #0b5ed7; }
+      
+      .btn-success { background-color: #198754; width: 100%; box-sizing: border-box; margin-top: 15px; padding: 15px; }
+      .btn-success:hover { background-color: #157347; }
+
+      .btn-download { background-color: #ffc107; color: #000; margin-top: 10px; font-size: 14px; padding: 8px 16px; display: inline-block;}
+      .btn-download:hover { background-color: #e0a800; }
+      
+      #fileInput { display: none; }
+      
+      .info-text { margin-top: 15px; font-size: 15px; color: #333; }
+      
+      #fileList {
+        text-align: left;
+        margin-top: 10px;
+        font-size: 14px;
+        color: #555;
+        max-height: 100px;
+        overflow-y: auto;
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        display: none;
+      }
+      .file-item { margin-bottom: 5px; }
+
+      #progressContainer {
+        display: none;
+        margin-top: 25px;
+        padding-top: 20px;
+        border-top: 1px solid #eee;
+      }
+      .progress-bar-bg {
+        background-color: #e9ecef;
+        border-radius: 10px;
+        height: 12px;
+        width: 100%;
+        margin: 15px 0;
+        overflow: hidden;
+      }
+      #progressBar {
+        background-color: #0d6efd;
+        height: 100%;
+        width: 0%;
+        transition: width 0.3s ease;
+      }
+      .status-title { font-weight: bold; color: #333; margin-bottom: 5px; }
+      .status-detail { font-size: 13px; color: #6c757d; }
+
+      #previewArea {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        margin-top: 30px;
+        width: 100%;
+        max-width: 800px;
+      }
+      
+      .preview-card {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+
+      .preview-title {
+        font-weight: 600;
+        margin-bottom: 15px;
+        color: #333;
+        word-break: break-all;
+      }
+
+      .image-comparison {
+        display: flex;
+        gap: 20px;
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .image-box {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        max-width: 300px;
+      }
+
+      .image-box p {
+        margin: 0 0 5px 0;
+        font-size: 13px;
+        font-weight: bold;
+      }
+
+      .preview-image {
+        max-width: 100%;
+        max-height: 250px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        background-color: #f8f9fa;
+        background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
+        background-size: 20px 20px;
+        background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+      }
+
+    </style>
+
+    <!-- PERBAIKAN UTAMA: Muat Pustaka secara Global (Bukan Module) -->
+    <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/imglyRemoveBackground.umd.js"></script>
+    
+  </head>
+  <body>
+    <div class="card">
+      <h2>Hapus Background AI</h2>
+      <p>Pilih foto, lalu klik mulai. Proses berjalan 100% di browsermu.</p>
+
+      <div id="step1">
+        <label for="fileInput" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">1. Pilih Foto (Bisa Banyak)</label>
+        
+        <input type="file" id="fileInput" accept="image/*" multiple onchange="handleFileSelection(event)">
+        
+        <div id="fileCount" class="info-text">Belum ada foto yang dipilih.</div>
+        <div id="fileList"></div>
+      </div>
+
+      <div id="step2" style="display: none;">
+        <button id="startBtn" class="btn btn-success" onclick="startProcessing()">2. Mulai Hapus Background</button>
+      </div>
+
+      <div id="progressContainer">
+        <div id="statusTitle" class="status-title">Menyiapkan sistem...</div>
+        <div class="progress-bar-bg">
+          <div id="progressBar"></div>
+        </div>
+        <div id="statusDetail" class="status-detail">Mohon tunggu...</div>
+      </div>
+    </div>
+
+    <div id="previewArea"></div>
+
+    <!-- SCRIPT TUNGGAL: Menggabungkan Antarmuka dan Pemrosesan -->
+    <script>
+      let globalSelectedFiles = [];
+
+      // Fungsi 1: Menangani Pemilihan File
+      function handleFileSelection(event) {
+        const fileInput = event.target;
+        const fileCount = document.getElementById('fileCount');
+        const fileList = document.getElementById('fileList');
+        const step2 = document.getElementById('step2');
+        const previewArea = document.getElementById('previewArea');
+        
+        globalSelectedFiles = Array.from(fileInput.files);
+        previewArea.innerHTML = ''; 
+        
+        if (globalSelectedFiles.length > 0) {
+          fileCount.innerHTML = `✅ Terpilih <b>${globalSelectedFiles.length}</b> foto.`;
+          
+          fileList.style.display = 'block';
+          fileList.innerHTML = globalSelectedFiles.map(file => `<div class="file-item">📄 ${file.name}</div>`).join('');
+          
+          step2.style.display = 'block';
+        } else {
+          fileCount.innerHTML = 'Belum ada foto yang dipilih.';
+          fileList.style.display = 'none';
+          fileList.innerHTML = '';
+          step2.style.display = 'none';
+        }
+      }
+
+      // Fungsi 2: Menjalankan Proses AI
+      async function startProcessing() {
+        if (!globalSelectedFiles || globalSelectedFiles.length === 0) return;
+
+        document.getElementById('step2').style.display = 'none';
+        document.querySelector('label[for="fileInput"]').style.display = 'none';
+        document.getElementById('fileCount').style.display = 'none';
+        document.getElementById('fileList').style.display = 'none';
+        
+        const progressContainer = document.getElementById('progressContainer');
+        progressContainer.style.display = 'block';
+
+        const statusTitle = document.getElementById('statusTitle');
+        const statusDetail = document.getElementById('statusDetail');
+        const progressBar = document.getElementById('progressBar');
+        const previewArea = document.getElementById('previewArea');
+
+        let successCount = 0;
+        let failCount = 0;
+        const total = globalSelectedFiles.length;
+
+        const config = {
+          publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
+          progress: (key, current, totalProgress) => {
+            const percent = totalProgress ? Math.round((current / totalProgress) * 100) : 0;
+            let actionName = "Memproses data";
+            if (key.includes('fetch')) actionName = "Mengunduh Model AI (Hanya di awal)";
+            else if (key.includes('compute')) actionName = "Memotong Background Foto";
+
+            statusDetail.innerText = `${actionName} ... ${percent}%`;
+            progressBar.style.width = `${percent}%`;
+          }
+        };
+
+        for (let i = 0; i < total; i++) {
+          const file = globalSelectedFiles[i];
+          const fileNum = i + 1;
+          
+          statusTitle.innerHTML = `⏳ Memproses Foto (${fileNum}/${total}): <br><span style="color:#0d6efd">${file.name}</span>`;
+          progressBar.style.width = '0%';
+          statusDetail.innerText = "Persiapan...";
+
+          try {
+            const originalImageUrl = URL.createObjectURL(file);
+            
+            // PERBAIKAN: Memanggil pustaka langsung dari objek global yang dimuat CDN
+            const imageBlob = await imglyRemoveBackground(file, config);
+            
+            statusDetail.innerText = "Menyiapkan pratinjau...";
+            progressBar.style.width = '100%';
+
+            const resultImageUrl = URL.createObjectURL(imageBlob);
+            const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+            const downloadFileName = originalName + '_nobg.png';
+
+            const previewCard = document.createElement('div');
+            previewCard.className = 'preview-card';
+            previewCard.innerHTML = `
+              <div class="preview-title">${file.name}</div>
+              <div class="image-comparison">
+                <div class="image-box">
+                  <p>Asli</p>
+                  <img src="${originalImageUrl}" class="preview-image" style="background-image: none; background-color: #fff;">
+                </div>
+                <div class="image-box">
+                  <p>Hasil (Tanpa Background)</p>
+                  <img src="${resultImageUrl}" class="preview-image">
+                </div>
+              </div>
+              <a href="${resultImageUrl}" download="${downloadFileName}" class="btn btn-download">⬇️ Unduh Gambar Ini</a>
+            `;
+            
+            previewArea.appendChild(previewCard);
+            successCount++;
+          } catch (err) {
+            console.error('Error pada', file.name, err);
+            failCount++;
+            
+            const errorCard = document.createElement('div');
+            errorCard.className = 'preview-card';
+            errorCard.innerHTML = `<div class="preview-title" style="color: #dc3545;">Gagal memproses: ${file.name}</div>`;
+            previewArea.appendChild(errorCard);
+          }
+        }
+
+        // Tampilan selesai
+        progressBar.parentElement.style.display = 'none';
+        statusDetail.style.display = 'none';
+
+        if (failCount === 0) {
+          statusTitle.innerHTML = `<span style="color: #198754; font-size:18px;">🎉 Selesai!<br>Silakan lihat pratinjau dan unduh gambar di bawah.</span>`;
+        } else {
+          statusTitle.innerHTML = `<span style="color: #198754;">✅ ${successCount} foto sukses.</span><br><span style="color: #dc3545;">❌ ${failCount} foto gagal.</span>`;
+        }
+        
+        setTimeout(() => {
+          document.querySelector('label[for="fileInput"]').style.display = 'inline-block';
+          document.getElementById('fileInput').value = '';
+          globalSelectedFiles = []; 
+        }, 2000);
+      }
+    </script>
+  </body>
+</html>
