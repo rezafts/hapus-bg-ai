@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hapus Background AI (Vercel Edition)</title>
+    <title>Hapus Background AI</title>
     <style>
       body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -79,7 +79,6 @@
         border-top: 1px solid #eee;
       }
       
-      /* Progress Log Style */
       #progressLog {
         text-align: left;
         font-size: 12px;
@@ -95,7 +94,6 @@
       }
 
       .status-title { font-weight: bold; color: #333; margin-bottom: 5px; }
-      .error-text { color: #dc3545; font-size: 13px; font-weight: bold; margin-top: 10px; word-break: break-all; }
 
       #previewArea {
         display: flex;
@@ -157,9 +155,9 @@
 
     <div id="previewArea"></div>
 
-    <!-- MENGGUNAKAN MODULE IMPORT MODERN UNTUK VERCEL -->
+    <!-- MENGGUNAKAN VERSI 3 TERBARU DARI HUGGING FACE -->
     <script type="module">
-      import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';
+      import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.0-alpha.12';
       
       env.allowLocalModels = false;
       env.useBrowserCache = true;
@@ -204,28 +202,26 @@
         progressContainer.style.display = 'block';
         
         const statusTitle = document.getElementById('statusTitle');
-        const previewArea = document.getElementById('previewArea');
         document.getElementById('progressLog').innerHTML = '';
 
         try {
             if (!segmenter) {
-                logProgress("Mengunduh model AI (MODNet)...");
-                logProgress("Proses ini memakan data ~25MB, harap tunggu...");
+                logProgress("Mengunduh model AI (RMBG-1.4)...");
+                logProgress("Ukurannya ~40MB, hanya diunduh pada foto pertama.");
                 
-                // PERBAIKAN: Mengganti model RMBG-1.4 yang tidak disupport ke Xenova/modnet
-                segmenter = await pipeline('image-segmentation', 'Xenova/modnet', {
+                segmenter = await pipeline('image-segmentation', 'briaai/RMBG-1.4', {
                     progress_callback: (info) => {
                         if (info.status === 'progress' && info.name) {
                             let percent = Math.round((info.loaded / info.total) * 100);
-                            if(percent % 20 === 0) { 
+                            if(percent % 25 === 0) { 
                                 logProgress(`Download ${info.name}: ${percent}%`);
                             }
                         } else if (info.status === 'done') {
-                            logProgress(`Selesai download ${info.file}`);
+                            logProgress(`Selesai download file.`);
                         }
                     }
                 });
-                logProgress("Model AI berhasil dimuat!");
+                logProgress("✅ Model AI berhasil dimuat!");
             }
 
             for (let i = 0; i < window.globalSelectedFiles.length; i++) {
@@ -234,12 +230,11 @@
                 
                 try {
                     const originalImageUrl = URL.createObjectURL(file);
-                    logProgress("Sedang memotong background...");
+                    logProgress("Sedang memotong background, tunggu sebentar...");
                     
-                    // Eksekusi AI MODNet
+                    // Eksekusi AI v3
                     const result = await segmenter(originalImageUrl);
                     
-                    // Membuat gambar PNG transparan
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     
@@ -247,22 +242,19 @@
                     img.src = originalImageUrl;
                     
                     await new Promise((resolve, reject) => {
-                        img.onload = () => {
+                        img.onload = async () => {
                             canvas.width = img.width;
                             canvas.height = img.height;
-                            
-                            // 1. Gambar foto asli
                             ctx.drawImage(img, 0, 0);
                             
-                            // 2. Terapkan mask (hitam putih) dari AI
-                            const maskRawImage = Array.isArray(result) ? result[0].mask : result.mask; 
+                            // Di v3, result bisa berupa array atau object langsung
+                            let maskRawImage = result.mask || (result[0] ? result[0].mask : null); 
                             
                             if (!maskRawImage) {
-                                reject(new Error("AI tidak mengembalikan data mask."));
+                                reject(new Error("AI tidak mengenali objek di foto ini."));
                                 return;
                             }
 
-                            // Konversi mask dari model ke Image
                             const maskImg = new Image();
                             maskImg.onload = () => {
                                 const maskCanvas = document.createElement('canvas');
@@ -270,15 +262,12 @@
                                 maskCanvas.height = canvas.height;
                                 const maskCtx = maskCanvas.getContext('2d');
                                 
-                                // Gambar mask ke kanvas sementara sesuai ukuran foto
                                 maskCtx.drawImage(maskImg, 0, 0, canvas.width, canvas.height);
                                 
-                                // Gabungkan (hanya simpan pixel asli yang kena warna putih di mask)
                                 ctx.globalCompositeOperation = 'destination-in';
                                 ctx.drawImage(maskCanvas, 0, 0);
                                 ctx.globalCompositeOperation = 'source-over';
                                 
-                                // Ubah ke file download
                                 canvas.toBlob((blob) => {
                                     const resultImageUrl = URL.createObjectURL(blob);
                                     const originalName = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
@@ -307,8 +296,29 @@
                                 }, 'image/png');
                             };
                             
-                            // Ekstrak URL data dari RawImage object Transformers.js
-                            maskRawImage.toDataURL().then(url => { maskImg.src = url; });
+                            // Mengekstrak mask di v3
+                            try {
+                                if (typeof maskRawImage === 'string') {
+                                    maskImg.src = maskRawImage;
+                                } else if (maskRawImage.toDataURL) {
+                                    maskImg.src = await maskRawImage.toDataURL();
+                                } else {
+                                    // Fallback jika berupa objek PIL internal
+                                    const maskCanvasInternal = document.createElement('canvas');
+                                    maskCanvasInternal.width = maskRawImage.width;
+                                    maskCanvasInternal.height = maskRawImage.height;
+                                    const ctxInternal = maskCanvasInternal.getContext('2d');
+                                    const imgData = new ImageData(
+                                      new Uint8ClampedArray(maskRawImage.data), 
+                                      maskRawImage.width, 
+                                      maskRawImage.height
+                                    );
+                                    ctxInternal.putImageData(imgData, 0, 0);
+                                    maskImg.src = maskCanvasInternal.toDataURL();
+                                }
+                            } catch (maskErr) {
+                                reject(new Error("Gagal membaca hasil potongan AI."));
+                            }
                         };
                     });
 
