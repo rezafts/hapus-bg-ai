@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <base target="_top">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hapus Background AI (Vercel Edition)</title>
     <style>
       body {
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -92,6 +94,7 @@
       }
       .status-title { font-weight: bold; color: #333; margin-bottom: 5px; }
       .status-detail { font-size: 13px; color: #6c757d; }
+      .error-text { color: #dc3545; font-size: 13px; font-weight: bold; margin-top: 10px; word-break: break-all; }
 
       #previewArea {
         display: flex;
@@ -150,23 +153,20 @@
         background-size: 20px 20px;
         background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
       }
-
     </style>
 
-    <!-- PERBAIKAN UTAMA: Muat Pustaka secara Global (Bukan Module) -->
+    <!-- Memuat Imgly secara spesifik -->
     <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/imglyRemoveBackground.umd.js"></script>
     
   </head>
   <body>
     <div class="card">
       <h2>Hapus Background AI</h2>
-      <p>Pilih foto, lalu klik mulai. Proses berjalan 100% di browsermu.</p>
+      <p>Proses berjalan 100% di browsermu.</p>
 
       <div id="step1">
         <label for="fileInput" class="btn btn-primary" onclick="document.getElementById('fileInput').click()">1. Pilih Foto (Bisa Banyak)</label>
-        
         <input type="file" id="fileInput" accept="image/*" multiple onchange="handleFileSelection(event)">
-        
         <div id="fileCount" class="info-text">Belum ada foto yang dipilih.</div>
         <div id="fileList"></div>
       </div>
@@ -186,11 +186,9 @@
 
     <div id="previewArea"></div>
 
-    <!-- SCRIPT TUNGGAL: Menggabungkan Antarmuka dan Pemrosesan -->
     <script>
       let globalSelectedFiles = [];
 
-      // Fungsi 1: Menangani Pemilihan File
       function handleFileSelection(event) {
         const fileInput = event.target;
         const fileCount = document.getElementById('fileCount');
@@ -203,10 +201,8 @@
         
         if (globalSelectedFiles.length > 0) {
           fileCount.innerHTML = `✅ Terpilih <b>${globalSelectedFiles.length}</b> foto.`;
-          
           fileList.style.display = 'block';
           fileList.innerHTML = globalSelectedFiles.map(file => `<div class="file-item">📄 ${file.name}</div>`).join('');
-          
           step2.style.display = 'block';
         } else {
           fileCount.innerHTML = 'Belum ada foto yang dipilih.';
@@ -216,7 +212,6 @@
         }
       }
 
-      // Fungsi 2: Menjalankan Proses AI
       async function startProcessing() {
         if (!globalSelectedFiles || globalSelectedFiles.length === 0) return;
 
@@ -237,15 +232,16 @@
         let failCount = 0;
         const total = globalSelectedFiles.length;
 
-        const config = {
+        // PERBAIKAN VITAL: Menetapkan struktur path yang benar agar UMD tidak bingung mencari file .wasm/.onnx
+        const imglyConfig = {
           publicPath: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.5.5/dist/',
           progress: (key, current, totalProgress) => {
             const percent = totalProgress ? Math.round((current / totalProgress) * 100) : 0;
-            let actionName = "Memproses data";
-            if (key.includes('fetch')) actionName = "Mengunduh Model AI (Hanya di awal)";
-            else if (key.includes('compute')) actionName = "Memotong Background Foto";
+            let actionName = "Memproses...";
+            if (key.includes('fetch') || key.includes('model')) actionName = "Mengunduh Otak AI (Tunggu sebentar)...";
+            else if (key.includes('compute')) actionName = "Memotong Background...";
 
-            statusDetail.innerText = `${actionName} ... ${percent}%`;
+            statusDetail.innerText = `${actionName} ${percent}%`;
             progressBar.style.width = `${percent}%`;
           }
         };
@@ -259,10 +255,15 @@
           statusDetail.innerText = "Persiapan...";
 
           try {
+            // Mengecek apakah library benar-benar termuat
+            if (typeof imglyRemoveBackground === 'undefined') {
+                throw new Error("Library Imgly tidak termuat! Pastikan koneksi internet lancar dan CDN tidak diblokir.");
+            }
+
             const originalImageUrl = URL.createObjectURL(file);
             
-            // PERBAIKAN: Memanggil pustaka langsung dari objek global yang dimuat CDN
-            const imageBlob = await imglyRemoveBackground(file, config);
+            // Eksekusi fungsi dengan konfigurasi yang diperbaiki
+            const imageBlob = await imglyRemoveBackground(file, imglyConfig);
             
             statusDetail.innerText = "Menyiapkan pratinjau...";
             progressBar.style.width = '100%';
@@ -281,7 +282,7 @@
                   <img src="${originalImageUrl}" class="preview-image" style="background-image: none; background-color: #fff;">
                 </div>
                 <div class="image-box">
-                  <p>Hasil (Tanpa Background)</p>
+                  <p>Hasil</p>
                   <img src="${resultImageUrl}" class="preview-image">
                 </div>
               </div>
@@ -291,12 +292,17 @@
             previewArea.appendChild(previewCard);
             successCount++;
           } catch (err) {
-            console.error('Error pada', file.name, err);
+            console.error('Error lengkap:', err);
             failCount++;
             
+            // PERBAIKAN VITAL: Tampilkan ALASAN error ke layar agar kita tidak menebak-nebak
             const errorCard = document.createElement('div');
             errorCard.className = 'preview-card';
-            errorCard.innerHTML = `<div class="preview-title" style="color: #dc3545;">Gagal memproses: ${file.name}</div>`;
+            errorCard.innerHTML = `
+              <div class="preview-title" style="color: #dc3545;">❌ Gagal memproses: ${file.name}</div>
+              <div class="error-text">Alasan: ${err.message || err.toString()}</div>
+              <div style="font-size:12px; color:#666; margin-top:5px;">(Coba gunakan foto lain atau resolusi lebih kecil)</div>
+            `;
             previewArea.appendChild(errorCard);
           }
         }
@@ -306,16 +312,16 @@
         statusDetail.style.display = 'none';
 
         if (failCount === 0) {
-          statusTitle.innerHTML = `<span style="color: #198754; font-size:18px;">🎉 Selesai!<br>Silakan lihat pratinjau dan unduh gambar di bawah.</span>`;
+          statusTitle.innerHTML = `<span style="color: #198754; font-size:18px;">🎉 Selesai!</span>`;
         } else {
-          statusTitle.innerHTML = `<span style="color: #198754;">✅ ${successCount} foto sukses.</span><br><span style="color: #dc3545;">❌ ${failCount} foto gagal.</span>`;
+          statusTitle.innerHTML = `<span>Proses selesai. Sebagian gagal.</span>`;
         }
         
         setTimeout(() => {
           document.querySelector('label[for="fileInput"]').style.display = 'inline-block';
           document.getElementById('fileInput').value = '';
           globalSelectedFiles = []; 
-        }, 2000);
+        }, 1500);
       }
     </script>
   </body>
